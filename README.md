@@ -219,3 +219,92 @@ Tần số dao động đo được dao động quanh 1kHz (843, 880, 886, 889, 
 
 ## 13. Nhật ký cập nhật
 - 2026-10-08: Khởi tạo README từ cuộc chat. Đã tổng hợp trạng thái phần cứng EC và độ ẩm: sửa nhiễu bằng Cin/Cout cho B0509S, phát hiện lỗi C22 mắc nối tiếp, mâu thuẫn chiều R_soil ↔ EC_OUT_DC và nghi vấn GPIO33/IO34, PCB còn 1 net unrouted.
+
+---
+## Cập nhật 08/10/2026
+
+**Tôi hỏi:**
+1. Sau khi tháo lắp lại Khối 1, sóng ra 8.xxxkHz thay vì ~1kHz. Nguyên nhân là gì, dây lỏng có làm tần số nhân lên không? Đo bằng đồng hồ vạn năng ra 9.52kHz (DC 1.52V, que GND ở GND_MAIN), lắp lại vẫn ~9kHz.
+2. Có 3 loại GND (GND_MAIN, GNDA, COM) là gì, GND_MAIN ở đâu. Khối C21 + R16 có cần lắp không. Chân 11 của TLC2274 nối GNDA trực tiếp hay qua nút C21/R16.
+3. Kiểm tra lại schematic KiCad: dựa vào đâu chắc chắn J5_EC_1 phát sin ~1kHz.
+4. Tháo hết, chỉ lắp lại Khối 1 + mass ảo + nguồn. Danh sách linh kiện bị sai, cách nối U3D/C18, cách nối C13/C20, chân output của U3A.
+5. Mô phỏng Proteus (R_test 10K): có khớp kỳ vọng không, đo tần số chính xác thế nào, kiểm tra mạch Proteus so với schematic.
+6. Nếu đúng như schematic thì tín hiệu ở 2 cọc và đầu ra ra sao. ESP32 nhận dải DC bao nhiêu và tính từ đâu. Chập 2 cọc có ra 1.58V không.
+7. Giải thích nguyên lý cảm biến EC, từng linh kiện và từng chân TLC2274 (yêu cầu nói lại từ đầu sau khi tôi chỉ ra sai chân).
+8. Thêm linh kiện lọc nhiễu ở cọc 1 và ở EC_OUT. Xem Proteus trước/sau khi thêm.
+9. Cọc 1 phát, cọc 2 thu thì so sánh thế nào để biết đất ẩm. Khuếch đại và chỉnh lưu làm gì. Bắt đỉnh có đáng tin không. Vì sao biên độ ±0.6V chứ không ±1.65V. Dải 1–2.2V có đủ không. Đã có mạch thực tế tương tự chưa. "Đo EC thì đất phải ẩm 20%–80%" có đúng không.
+10. Cảm biến độ ẩm J8 (2 cọc inox) có hoạt động không. Cọc inox trần dùng được không. Có cần bọc cách điện không, bọc tới đâu, bọc kín thì đo bằng cách nào. Nhờ tìm que bọc cách điện, vẽ animation (tôi chỉ ra GPIO5 và IO32 chung 1 cọc).
+11. Sóng sin méo đỉnh có ảnh hưởng đo EC không, có cách làm đẹp không. Giải thích từng linh kiện Khối 2, 3 và rà lại Khối 1 sau khi thêm R17. Yêu cầu xuất file.
+12. PCB KiCad: 3 linh kiện mới không hiện ra, còn 1 net unrouted không tìm thấy.
+13. Sóng thật trên breadboard rất nhiễu, khác mô phỏng (que x10, đo sau R17, GND ngắn, đã thử R17 = 220/330Ω). Đo +9V và V_MID. Lắp lại nguồn B0509S theo datasheet, giữ C21/R16, +9V ổn định. Vì sao mô phỏng sạch mà breadboard nhiễu.
+14. Viết README bàn giao. Đặt quy tắc lệnh "cập nhật".
+15. Có code Arduino tạo sin 1kHz bằng DAC GPIO25, nhờ thêm linh kiện cho sóng đẹp hơn và thay phần sóng sin của khối Wien-Bridge (có được không).
+
+**Kết quả / câu trả lời chính:**
+- Pinout TLC2274 (symbol TL074 trong KiCad), đã xác nhận từ file `ESP32.kicad_sch`:
+  - U3A: Pin 1 OUT, Pin 2 (−), Pin 3 (+).
+  - U3B: Pin 7 OUT, Pin 6 (−), Pin 5 (+).
+  - U3C: Pin 8 OUT, Pin 9 (−), Pin 10 (+). SIG_K2 vào Pin 10.
+  - U3D: Pin 14 OUT, Pin 13 (−), Pin 12 (+).
+  - Pin 4 = V+ (+9V), Pin 11 = V− (GNDA).
+- Giá trị đọc từ schematic: R7 10K, R8 10K, R9 10K, R14 4K7, C10 15nF, C11 15nF, D4/D5 1N4148, R15 10K, R10 10K, R11 100K, C17 0.1µF, R12 47K, R13 10K, C18 0.1µF, C13 0.1µF, C20 22µF, R16 10K, C21 0.1µF. Mới thêm: R17 100Ω (Pin 1 → J5_EC_1, feedback Wien lấy trước R17), R18 4K7 (node giữ → EC_OUT_DC), C22 0.1µF.
+- Đính chính các lỗi AI đã mắc và được sửa trong chat: gán ngược Pin 1 và Pin 3 của U3A; nhầm vai trò Pin 9/10 của U3C; nhầm tên C10/C11/C15 và R4/R18; mô tả C22 là "tụ lọc" trong khi nó mắc nối tiếp; vẽ J8 thành 2 cọc riêng biệt.
+- Proteus: giá trị linh kiện khớp thiết kế (designator khác KiCad: R1, R4, C1, C2...). Tần số đếm bằng mắt ~1.9–2kHz (chưa dùng cursor để xác nhận). Sóng có "vai" phẳng do AGC. Kênh DC sau khi thêm tụ lọc ở EC_OUT phẳng hơn rõ. Không đọc được file .pdsprj (nhị phân ISIS), chỉ dùng ảnh chụp.
+- Tần số 8–9.5kHz trên breadboard: giả thuyết "que GND ở GNDA" đã bị loại (đổi sang GND_MAIN vẫn 9.52kHz). Nguyên nhân chưa xác định. Nghi do đo nhầm chân vì AI từng chỉ sai chân output, chưa xác nhận. Các lần đo sau ở cọc 1 cho 0.89–1.06kHz.
+- Số đo oscilloscope (FNIRSI):
+  - Que x10 nhưng máy để 1:1 → giá trị thật ≈ ×10 (Vpp hiển thị 228–232mV ≈ 2.3V thật). Sau đó đặt 10:1.
+  - Tăng R17 (100 → 220 → 330Ω) không giảm nhiễu.
+  - +9V ngay ra B0509S: Vpp 3.43V (ripple lớn). V_MID: Vpp hiển thị 700mV (cần xác nhận hệ số que).
+- Sửa nguồn: lắp Cin/Cout theo datasheet B0509S-1W, bảng (1) cho 5V→9V (Cin 4.7µF/16V, Cout 2.2µF/16V; mạch EMC hình 4: LDM 6.8µH, C1/C2 4.7µF/25V, CY 270pF/2kV là tuỳ chọn). Giữ C21 + R16. Tôi báo +9V ổn định, không nhiễu (chưa có số ripple cụ thể). Ảnh sóng sạch: Vmax +2.62V, Vavg +1.57V, 886Hz (DC, 1V/div, 500µs/div).
+- Kết luận AI: nhiễu đến từ ripple nguồn B0509S, không phải từ R17. Mô phỏng sạch vì dùng nguồn lý tưởng. AI lưu ý ảnh "sóng nhiễu" tôi gửi lại giống hệt ảnh cũ (Vpp 232, +132mV, −99mV, 1.00kHz), nên thứ tự thời gian có thể ngược.
+- Lỗi mới AI phát hiện ở Khối 3: C22 mắc nối tiếp sau R11 ∥ C17 xuống GNDA → mất đường xả DC (τ = R11×C17 = 10ms), node giữ chỉ leo lên mức đỉnh. Cách sửa: nối R11 ∥ C17 thẳng xuống GNDA, bỏ C22 khỏi đường này. Nếu cần lọc thêm thì đặt tụ song song xuống GND_MAIN sau R18, trước ADC.
+- Schematic KiCad hiện chưa có Cin/Cout cho B0509S (chỉ có C21, R16).
+- Nguyên lý EC (AI giải thích): cọc 1 phát AC ~1kHz biên độ cố định nhờ AGC, đất làm đổi biên độ ở cọc 2, U3B khuếch đại (Av = −1), U3C chỉnh lưu bắt đỉnh (D3 trong vòng hồi tiếp, C17 giữ, R11 xả), ra DC cho ESP32. Dùng AC để tránh phân cực/điện phân. Cần calibration vì quan hệ phi tuyến. Biên độ ±0.6–1V do ngưỡng diode AGC và để chừa khoảng trống an toàn. Dải 1–2.2V đủ hay không phải kiểm tra bằng dung dịch chuẩn.
+- Lọc nhiễu đã áp dụng: R17 100Ω (Rnull), R18 4K7, C22 (đang mắc sai).
+- Mâu thuẫn chưa giải quyết (AI đã nêu): mô hình chia áp giữa chat (EC_OUT = 1.58 + 1.03×R/(20000+R), chập = 1.58V, khô → EC_OUT cao) không khớp schematic hiện tại và ngược với kỳ vọng ở bản tóm tắt phiên 29/9 (không cắm 1.50–1.65V, R_test 10K 1.75–1.95V, R_test 1K 2.00–2.30V).
+- Có tiền lệ thực tế (AI tìm trên web): bài MDPI Precision Agriculture (kích thích AC, precision rectifier, peak detector), thread EEVblog (quad op-amp làm oscillator + rectifier), dự án GitHub ESP32 + đầu dò EC thủy canh, hướng dẫn dùng TL072 với dải 1–30kHz. Chưa có tên bài và repo cụ thể.
+- "Đất phải ẩm 20%–80%": AI không tìm thấy căn cứ. Cảm biến thương mại công bố 0–100% (sai số ±2% ở 0–50%, ±3% ở 50–100%, EC tới 10000µS/cm). Tôi chưa cung cấp nguồn.
+- Cảm biến độ ẩm J8: J8 pin 1 → R5 1M → GPIO5_Kich, và pin 1 → R6 1K → A0_IO32 (GPIO32), pin 2 → GND. Nguyên lý RCtime: 2 que bọc cách điện + đất = tụ, đất ẩm thì điện dung lớn, nạp chậm hơn. Que inox trần (ảnh tôi gửi) dùng được cho EC, không dùng cho độ ẩm. Phải bọc kín toàn bộ phần chôn, kể cả mũi nhọn (keo epoxy), kiểm tra bằng đồng hồ: hở mạch (OL) trong không khí. Không tìm thấy que bọc cách điện bán rời, AI gợi ý tự làm bằng ống co nhiệt. Chưa có code RCtime.
+- Sóng sin: đỉnh bằng do AGC, không ảnh hưởng nhiều vì mạch đo biên độ đỉnh. Điều kiện thật sự: biên độ đỉnh lặp lại ổn định, không có gai ký sinh. Cách làm đẹp (tăng R14, Schottky, JFET) chưa áp dụng.
+- File đã xuất: `Giai-thich-mach-EC-Khoi-1-2-3.md` (cần cập nhật: mô tả C22 sai, mô hình chiều R_soil ↔ EC_OUT). Đã viết README bàn giao.
+- PCB: hướng dẫn gán footprint, Update PCB from Schematic (F8), tìm linh kiện bị xếp chồng, ratsnest, List Nets, DRC để tìm net unrouted. Tôi chưa gửi kết quả DRC.
+- Code DAC (file `New Text Document.txt`): `dac_continuous`, GPIO25, 100 mẫu/chu kỳ, 100kS/s, tâm 128, biên 90. AI tính tâm ≈ 1.65V, Vpp ≈ 2.3V. IO25 hiện bỏ trống (dấu X) trong schematic MCU.
+- Đề xuất AI thay Wien: dùng U3A làm Sallen-Key thông thấp bậc 2 (đơn vị gain), fc ≈ 4.95kHz, hệ số ≈ 1.00 ở 1kHz, ≈ −52dB ở 99kHz.
+  - GPIO25 → Cc 1µF → node A (Rb 100K về V_MID) → R1 10K → node B → R2 10K → Pin 3 (+).
+  - C1 4.7nF từ node B về Pin 1; C2 2.2nF từ Pin 3 về V_MID; Pin 2 nối thẳng Pin 1; ra R17 → J5_EC_1.
+  - Bỏ R7, R8, R9, R14, C10, C11, D4, D5.
+  - Nếu biên độ tụt do trở kháng ra của DAC: R1 = R2 = 22K, C1 = 2.2nF, C2 = 1nF.
+  - Lưu ý: biên độ DAC phụ thuộc rail 3V3 (Wi-Fi gây sụt), tính cách ly GNDA yếu đi, không nối DAC thẳng vào cọc (tâm DAC lệch V_MID).
+  - AI chưa kiểm chứng: tần số I2S thật, việc DMA lặp liền mạch, trở kháng ra của DAC.
+  - AI nói việc thay Wien không bắt buộc để đo chính xác.
+
+**Quyết định:**
+- Lắp Cin/Cout cho B0509S theo datasheet, giữ C21 + R16 (lý do: ripple 3.43Vpp ở +9V gây nhiễu sóng Wien).
+- Thêm R17 100Ω, R18 4K7, C22 0.1µF vào schematic. Giữ hay bỏ R17 chưa chốt (tăng lên 220/330Ω không đổi kết quả).
+- Cọc EC dùng Inox 316 trần. Cọc độ ẩm cần bọc cách điện kín. AI gợi ý tự làm (ống co nhiệt + epoxy), tôi chưa xác nhận.
+- Muốn thay khối Wien-Bridge bằng sóng sin DAC GPIO25 (AI đề xuất cấu hình ở trên, chưa lắp).
+- Cách làm việc: khi cần tài liệu thì xuất ra file; gõ "cập nhật" thì xuất đoạn README theo khuôn.
+
+**Còn nghi vấn:**
+- Chiều quan hệ R_soil ↔ EC_OUT_DC (mâu thuẫn như trên), cần đo hở, R_test 10K, R_test 1K, chập.
+- Lúc chụp ảnh sóng sạch, R17, R18, C22 còn trên board không.
+- EC_OUT_DC nối GPIO33 hay IO34 (ảnh schematic MCU cho thấy IO34 và IO33 bỏ trống; code và giải thích dùng GPIO33).
+- Cin/Cout đã thêm vào schematic KiCad chưa. Ripple +9V thực tế sau khi sửa là bao nhiêu mV.
+- Nguyên nhân 8–9.5kHz trước đây; tần số Proteus ~2kHz chưa xác nhận bằng cursor.
+- R4 có nối nhầm với +9V trong Proteus không (AI nghi do dây bắt chéo, chưa kiểm tra junction).
+- Vai trò chính xác của C19 1µF (khối mass ảo) chưa được giải thích. U3B Pin 7 AC RMS thấp ở phiên cũ chưa có kết luận.
+- Net unrouted trong PCB và việc 3 linh kiện mới đã vào PCB đúng chưa.
+- Nguồn của con số 20%–80% độ ẩm; dải EC mục tiêu của cải bẹ xanh.
+- Cảm biến độ ẩm J8 chưa kiểm chứng thực tế, chưa có code.
+- Đo thực tế code DAC: Vpp, tâm, tần số.
+
+**Việc cần làm tiếp:**
+1. Trả lời: R17, R18, C22 còn trên board khi chụp ảnh sóng sạch không. Cin/Cout đã thêm vào KiCad chưa.
+2. Đo Pin 1 U3A và +9V ở AC, 100mV/div, kênh 10:1, chụp ảnh gửi AI.
+3. Sửa C22 (R11 ∥ C17 thẳng xuống GNDA), thêm Cin 4.7µF/16V và Cout 2.2µF/16V sát chân B0509S, xác nhận chân ADC (IO34 hay GPIO33).
+4. Chạy DRC, gửi danh sách lỗi (Missing connection) để tìm net unrouted. Xác nhận R17, R18, C22 trong PCB.
+5. Đo EC_OUT_DC với hở, R_test 10K, R_test 1K, chập để giải quyết mâu thuẫn chiều quan hệ.
+6. Nếu thử DAC: chạy code riêng, đo GPIO25 (kỳ vọng ~1kHz, Vpp ≈ 2.3V, tâm ≈ 1.65V). Dựng Sallen-Key bằng U3A trên breadboard, đo Pin 1 (Vpp ≈ 2.3V, tâm ≈ 1.58V). Nối R17 → J5_EC_1 và test lại R_test. Chỉ sửa PCB sau khi ổn.
+7. Làm que cách điện cho cảm biến độ ẩm (ống co nhiệt + epoxy bịt mũi), kiểm tra OL, viết code RCtime (micros(), lấy trung bình).
+8. Hiệu chuẩn EC bằng dung dịch chuẩn trong dải của cải bẹ xanh. Code đọc ADC có oversampling.
+9. Cập nhật file `Giai-thich-mach-EC-Khoi-1-2-3.md` theo các kết quả trên.
